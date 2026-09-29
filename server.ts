@@ -102,6 +102,11 @@ function normalizePrefix(raw: string): string {
   if (/^yk[\s\-_]?tsut$/i.test(clean)) {
     return 'YK TSUT';
   }
+  // PAJ, PAT and SHT are valid, distinct handwritten prefixes.
+  // Never normalize one into another.
+  if (/^paj$/i.test(clean)) return 'PAJ';
+  if (/^pat$/i.test(clean)) return 'PAT';
+  if (/^sht$/i.test(clean)) return 'SHT';
   if (/^nsut$/i.test(clean)) return 'NSUT';
   if (/^tsut$/i.test(clean)) return 'TSUT';
   if (/^psut$/i.test(clean)) return 'PSUT';
@@ -707,6 +712,20 @@ CRITICAL RULES:
    - "YK NSUT" or "YK-NSUT" or "YKNSUT" -> Output prefix as "YK NSUT".
    - "YK PSUT" or "YK-PSUT" or "YKPSUT" -> Output prefix as "YK PSUT".
    - "YK TSUT" or "YK-TSUT" or "YKTSUT" -> Output prefix as "YK TSUT".
+   - "PAJ":
+     * PAJ is a valid and distinct prefix.
+     * If the handwritten section heading clearly says "PAJ", output exactly "PAJ".
+     * NEVER change "PAJ" to "PAT", "PAG", "PAI", or any other similar-looking text.
+     * PAJ and PAT are completely different prefixes.
+   - "PAT":
+     * PAT is also a valid and distinct prefix.
+     * If the handwritten section heading clearly says "PAT", output exactly "PAT".
+     * NEVER change "PAT" to "PAJ".
+   - "SHT":
+     * SHT is a valid and distinct prefix.
+     * If the handwritten section heading clearly says "SHT", output exactly "SHT".
+     * NEVER change "SHT" to another prefix.
+   - Read the section prefix exactly as handwritten. Do NOT autocorrect, guess, or normalize PAJ/PAT/SHT into one another.
 
 3. QUANTITY VS AGE/YEAR DISCRIMINATION RULE:
    - In warehouse inventory slips, every line follows:
@@ -724,9 +743,12 @@ CRITICAL RULES:
    - When an item code is omitted/blank at the start of a line (e.g. "- 4 - 5 - 1" or "- 11 - 12 - 2"):
    - INHERIT the item code from the line immediately above it within the SAME section!
    - Mark isCarryForward = true, and carryForwardFrom = the inherited code.
+   - The section prefix is also inherited by every row in that section when the row itself has no prefix.
+   - Example: if the section heading is "PAJ" and the row is "205 - 11 - 12 - 1", the row prefix MUST be "PAJ", not "PAT" or the default prefix.
+   - If the section prefix is PAJ, all blank-prefix rows in that section must remain PAJ.
 
 5. ROW FIELDS:
-   - Prefix: Section prefix (e.g. Tshrt, TSUT, PSUT, or YKTs)
+   - Prefix: Use the section heading prefix as the source of truth (e.g. PAJ, PAT, SHT, Tshrt, TSUT, PSUT, or YKTs). If a row prefix is blank, inherit the section prefix exactly.
    - Item Code: e.g. 126, 223, 170, 169, 697
    - Full Code: PREFIX-ITEMCODE (e.g. Tshrt-232, TSUT-126, PSUT-223, YKTs-697)
    - Year: The dash-separated year range e.g. "11-12", "6-7", "6-12", "18-24", "4-5", "2-3"
@@ -881,7 +903,15 @@ Extract all rows from all sections systematically. Return strictly JSON matching
     // Number rows sequentially, normalize prefixes, match with Master SKUs and assign IDs
     if (result.rows && Array.isArray(result.rows)) {
       result.rows = result.rows.map((row: any, idx: number) => {
-        const normalizedPrefix = normalizePrefix(row.prefix || defaultPrefix);
+        // Prefer the section heading as the source of truth for the prefix.
+        // Rows with a blank prefix inherit it; this prevents OCR from turning PAJ into PAT.
+        const section = Array.isArray(result.sections)
+          ? result.sections.find((s: any) => Number(s.sectionIndex) === Number(row.sectionIndex))
+          : null;
+        const sectionPrefix = String(section?.prefix || '').trim();
+        const rowPrefix = String(row.prefix || '').trim();
+        const rawPrefix = sectionPrefix || rowPrefix || defaultPrefix;
+        const normalizedPrefix = normalizePrefix(rawPrefix);
         let cleanItemCode = String(row.itemCode || '').trim();
         
         // Strip embedded prefix if present in itemCode (e.g. "TS-126", "Tshrt 126", "YKTs-126" or "YKT/s 126")
