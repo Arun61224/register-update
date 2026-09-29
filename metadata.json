@@ -1,0 +1,6 @@
+{
+  "name": "Slip2Excel - Handwritten Inventory to Excel Converter",
+  "description": "Click a photo or upload handwritten stock/bin slips to instantly extract part codes, year ranges, quantities, carry-forward blanks, and bin numbers into Excel with duplicate detection.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
